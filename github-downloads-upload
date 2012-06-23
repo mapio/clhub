@@ -19,7 +19,6 @@
 
 from json import load, loads, dump, dumps
 from getpass import getpass
-from io import StringIO
 from mimetypes import guess_type
 from os.path import expanduser, exists, getsize, basename
 from subprocess import Popen, PIPE
