@@ -43,7 +43,7 @@ else:
 
 if not user in tokens:
 	pwd = getpass( 'Password for user {0}: '.format( user ) )
-	data = { 'scopes': [ 'user', 'repo' ], 'note': 'Downloads Uploader' }
+	data = { 'scopes': [ 'user', 'repo', 'gist' ], 'note': 'Downloads Uploader' }
 	r = loads( curl( [ '-u', '{0}:{1}'.format( user, pwd ), 'https://api.github.com/authorizations' ], data ) )
 	try:
 		token = tokens[ user ] = r[ 'token' ]
