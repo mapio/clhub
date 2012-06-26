@@ -10,11 +10,21 @@ More in detail:
 * uses [OAuth2](http://developer.github.com/v3/#authentication) authentication,
 * the only (external) dependency is [curl](http://curl.haxx.se/), used to handle HTTP.
 
-You can invoke it as
+A list of availabel subcommands:
 
-	./clhub -h
+	$ ./clhub -h
+	usage: clhub [-h] [--version] {dls,dup,gup,drm,auth} ...
 
-to get a list of availabel subcommands (and relative options)
+	subcommands:
+	    auth                obtain an authorization token
+	    dls                 list the available downloads of a repo
+	    dup                 upload a file to the downloads of a repo
+	    drm                 remove one of the downloads of a repo
+	    gup                 update the contents of a file in a gist
+
+	optional arguments:
+	  -h, --help            show this help message and exit
+	  --version             show program's version number and exit
 
 To perform authenticated tasks, you must first use the `auth` subcommand that 
 will *register* an "Authorized application" named "Clhub (API)" under the suer 
