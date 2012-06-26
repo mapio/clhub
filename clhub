@@ -127,6 +127,18 @@ def do_drm( args ):
 		], token = token )
 	print res.status
 
+def do_gmk( args ):
+	try:
+		token = tokens[ args.user ]
+	except KeyError:
+		print 'No token found for {0}, plsease authenticate first...'.format( args.user )
+		return
+	res = curl( [ 'https://api.github.com/gists' ], 
+		{ 'description': args.desc, 'public': not args.private, 'files' : { args.filename: { 'content': args.content } } },
+		token 
+	)
+	print 'Gist id: ', res.json[ 'id' ]
+
 def do_gup( args ):
 	try:
 		token = tokens[ args.user ]
@@ -175,11 +187,19 @@ if __name__ == '__main__':
 
 	# gists 
 	
+	parser_gmk = subparsers.add_parser( 'gmk', help = 'update the contents of a file in a gist' )
+	parser_gmk.add_argument( 'user', help = 'gist owner' ) 
+	parser_gmk.add_argument( 'desc', help = 'gist description' ) 
+	parser_gmk.add_argument( '-p', '--private', help = 'whether the gist must be private', action = 'store_true' )
+	parser_gmk.add_argument( 'filename', help = 'name of the file to crate in the gist' ) 
+	parser_gmk.add_argument( 'content', help = 'content for the file' )
+	parser_gmk.set_defaults( func = do_gmk )
+
 	parser_gup = subparsers.add_parser( 'gup', help = 'update the contents of a file in a gist' )
 	parser_gup.add_argument( 'user', help = 'gist owner' ) 
 	parser_gup.add_argument( 'gid', help = 'gist id' ) 
 	parser_gup.add_argument( 'filename', help = 'name of the file in the gist to update' ) 
-	parser_gup.add_argument( 'content', help = 'new content for the file' ) 
+	parser_gup.add_argument( 'content', help = 'updated content for the file' ) 
 	parser_gup.set_defaults( func = do_gup )
 
 	# read stored tokens if present
