@@ -1,0 +1,196 @@
+#!/usr/bin/env python
+
+# Copyright (C) 2012 Massimo Santini <massimo.santini@unimi.it>
+#
+# This file is part of Learning-Week-2012-Software.
+# 
+# Learning-Week-2012-Software is free software: you can redistribute it and/or
+# modify it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or (at your
+# option) any later version.
+# 
+# Learning-Week-2012-Software is distributed in the hope that it will be
+# useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	See the GNU General
+# Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License along with
+# Learning-Week-2012-Software If not, see <http://www.gnu.org/licenses/>.
+
+from argparse import ArgumentParser
+from collections import namedtuple
+from getpass import getpass
+from httplib import responses
+from json import dump, dumps, load, loads
+from mimetools import Message
+from mimetypes import guess_type
+from os.path import expanduser, exists, getsize, basename
+from StringIO import StringIO
+from subprocess import Popen, PIPE
+from urllib import unquote
+from xml.dom.minidom import parseString
+from xml.parsers.expat import ExpatError
+
+__version__ = '0.1.0'
+
+def curl( args, data = None, token = None ):
+	if token:
+		auth = [ '-H', 'Authorization: token {0}'.format( token ) ]
+	else:
+		auth = []
+	p = Popen( [ 'curl', '-i', '-s' ] + auth + ( [ '-d', '@-' ] if data else [] ) + args, stdin = PIPE, stdout = PIPE )
+	response = p.communicate( dumps( data ) if data else None )[ 0 ]
+	status_headers, body = response.split( '\r\n\r\n', 1 )
+	if status_headers == 'HTTP/1.1 100 Continue':
+		status_headers, body = body.split( '\r\n\r\n', 1 )
+	status, headers = status_headers.split( '\r\n', 1 )
+	status = int( status.split()[ 1 ] )
+	status = ( status, responses[ status ] if status in responses else None )
+	headers = dict( Message( StringIO( headers ) ).items() )
+	try:
+		json = loads( body )
+	except ValueError:
+		json = None
+	try: 
+		xml = parseString( body )
+	except ExpatError:
+		xml = None
+	return curl.Result( status = status, headers = headers, body = body, json = json, xml = xml )
+curl.Result = namedtuple( 'Result', 'status headers body json xml' )
+
+def do_auth( args ):
+	pwd = getpass( 'Password for user {0}: '.format( args.user ) )
+	res = curl( 
+		[ '-u', '{0}:{1}'.format( args.user, pwd ), 'https://api.github.com/authorizations' ], 
+		{ 'scopes': [ 'user', 'repo', 'gist' ], 'note': 'Clhub' } 
+	)
+	try:
+		token = tokens[ args.user ] = res.json[ 'token' ]
+	except AttributeError:
+		raise RuntimeError( 'Problem authenticationg' )
+	with open( tokens_path, 'w' ) as f:
+		dump( tokens, f )
+	print 'Got token:', token
+
+def do_dls( args ):
+	try:
+		token = tokens[ args.user ]
+	except KeyError:
+		token = None
+		print 'No token found for {0}, using anonymous access...'.format( args.user )
+	res = curl( [ 'https://api.github.com/repos/{0}/{1}/downloads'.format( args.user, args.repo ) ], token = token )
+	if res.json:
+		print '\t'.join( ( 'DLID', 'NAME', 'DESCRIPTION' ) )
+		for dl in res.json: print '\t'.join( ( str( dl[ 'id' ] ), dl[ 'name' ], dl[ 'description' ] ) )
+
+def do_dup( args ):
+	try:
+		token = tokens[ args.user ]
+	except KeyError:
+		print 'No token found for {0}, plsease authenticate first...'.format( args.user )
+		return
+	name = basename( args.path )
+	content_type = guess_type( args.path )[ 0 ]
+	res = curl( 
+		[ 'https://api.github.com/repos/{0}/{1}/downloads'.format( args.user, args.repo ) ],
+		{ 'name': name, 'size': getsize( args.path ), 'description': args.desc, 'content_type': content_type },
+		token
+	)	
+	try:
+		r = res.json
+		res = curl( [
+			'-F', 'key=downloads/{0}/{1}/{2}'.format( args.user, args.repo, name ), 
+			'-F', 'acl={0}'.format( r[ 'acl' ] ),
+			'-F', 'success_action_status=201',
+			'-F', 'Filename={0}'.format( name ),
+			'-F', 'AWSAccessKeyId={0}'.format( r[ 'accesskeyid' ] ),
+			'-F', 'Policy={0}'.format( r[ 'policy' ] ),
+			'-F', 'Signature={0}'.format( r[ 'signature' ] ),
+			'-F', 'Content-Type={0}'.format( content_type ),
+			'-F', 'file=@{0}'.format( args.path ),
+			'https://github.s3.amazonaws.com/'
+		] )
+	except KeyError:
+		raise RuntimeError( 'Problems uploading' )
+	print 'Uploaded to: ', unquote( res.xml.getElementsByTagName( 'Location' )[ 0 ].firstChild.data )
+
+
+def do_drm( args ):
+	try:
+		token = tokens[ args.user ]
+	except KeyError:
+		print 'No token found for {0}, plsease authenticate first...'.format( args.user )
+		return
+	res = curl( [
+			'-X', 'DELETE',
+			'https://api.github.com/repos/{0}/{1}/downloads/{2}'.format( args.user, args.repo, args.dlid )
+		], token = token )
+	print res.status
+
+def do_gup( args ):
+	try:
+		token = tokens[ args.user ]
+	except KeyError:
+		print 'No token found for {0}, plsease authenticate first...'.format( args.user )
+		return
+	res = curl( [
+		'-X', 'PATCH',
+		'https://api.github.com/gists/{0}'.format( args.gid )
+		], 
+		{ 'files': { args.filename: { 'content': args.content } } }, 
+		token 
+	)
+	print 'New content: ', res.json[ 'files' ][ args.filename ][ 'content' ]
+
+if __name__ == '__main__':
+
+	argparser = ArgumentParser( prog = 'clhub' )
+	argparser.add_argument( '--version', action = 'version', version = '%(prog)s {0}'.format( __version__ ) )
+
+	subparsers = argparser.add_subparsers( help = 'subcommands')
+
+	# auth 
+	
+	parser_auth = subparsers.add_parser( 'auth', help = 'obtain an authorization token' )
+	parser_auth.add_argument( 'user', help = 'user to authenticate as to obtain the token' ) 
+	parser_auth.set_defaults( func = do_auth )
+	
+	# downloads
+
+	userrepo_parser = ArgumentParser( add_help = False )
+	userrepo_parser.add_argument( 'user', help = 'repository owner' ) 
+	userrepo_parser.add_argument( 'repo', help = 'repository name' )
+	
+	parser_dls = subparsers.add_parser( 'dls', help = 'list the available downloads of a repo', parents = [ userrepo_parser ] )
+	parser_dls.set_defaults( func = do_dls )
+
+	parser_dup = subparsers.add_parser( 'dup', help = 'upload a file to the downloads of a repo', parents = [ userrepo_parser ] )
+	parser_dup.add_argument( 'path', help = 'pathname of the file to upload' )
+	parser_dup.add_argument( 'desc', help = 'description' )
+	parser_dup.set_defaults( func = do_dup )
+
+	parser_drm = subparsers.add_parser( 'drm', help = 'remove one of the downloads of a repo', parents = [ userrepo_parser ] )
+	parser_drm.add_argument( 'dlid', help = 'the identity of the download' )
+	parser_drm.set_defaults( func = do_drm )
+
+	# gists 
+	
+	parser_gup = subparsers.add_parser( 'gup', help = 'update the contents of a file in a gist' )
+	parser_gup.add_argument( 'user', help = 'gist owner' ) 
+	parser_gup.add_argument( 'gid', help = 'gist id' ) 
+	parser_gup.add_argument( 'filename', help = 'name of the file in the gist to update' ) 
+	parser_gup.add_argument( 'content', help = 'new content for the file' ) 
+	parser_gup.set_defaults( func = do_gup )
+
+	# read stored tokens if present
+
+	tokens_path = expanduser( '~/.clhub-tokens.json' )
+	if exists( tokens_path ):
+		with open( tokens_path, 'r' ) as f: tokens = load( f )
+	else:
+		tokens = dict()
+
+	# go!
+	
+	args = argparser.parse_args()
+	args.func( args )
