@@ -3,17 +3,17 @@
 # Copyright (C) 2012 Massimo Santini <massimo.santini@unimi.it>
 #
 # This file is part of Learning-Week-2012-Software.
-# 
+#
 # Learning-Week-2012-Software is free software: you can redistribute it and/or
 # modify it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or (at your
 # option) any later version.
-# 
+#
 # Learning-Week-2012-Software is distributed in the hope that it will be
 # useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	See the GNU General
 # Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License along with
 # Learning-Week-2012-Software If not, see <http://www.gnu.org/licenses/>.
 
@@ -51,7 +51,7 @@ def curl( args, data = None, token = None ):
 		json = loads( body )
 	except ValueError:
 		json = None
-	try: 
+	try:
 		xml = parseString( body )
 	except ExpatError:
 		xml = None
@@ -60,9 +60,9 @@ curl.Result = namedtuple( 'Result', 'status headers body json xml' )
 
 def do_auth( args ):
 	pwd = getpass( 'Password for user {0}: '.format( args.user ) )
-	res = curl( 
-		[ '-u', '{0}:{1}'.format( args.user, pwd ), 'https://api.github.com/authorizations' ], 
-		{ 'scopes': [ 'user', 'repo', 'gist' ], 'note': 'Clhub' } 
+	res = curl(
+		[ '-u', '{0}:{1}'.format( args.user, pwd ), 'https://api.github.com/authorizations' ],
+		{ 'scopes': [ 'user', 'repo', 'gist' ], 'note': 'Clhub' }
 	)
 	try:
 		token = tokens[ args.user ] = res.json[ 'token' ]
@@ -91,15 +91,15 @@ def do_dup( args ):
 		return
 	name = basename( args.path )
 	content_type = guess_type( args.path )[ 0 ]
-	res = curl( 
+	res = curl(
 		[ 'https://api.github.com/repos/{0}/{1}/downloads'.format( args.user, args.repo ) ],
 		{ 'name': name, 'size': getsize( args.path ), 'description': args.desc, 'content_type': content_type },
 		token
-	)	
+	)
 	try:
 		r = res.json
 		res = curl( [
-			'-F', 'key=downloads/{0}/{1}/{2}'.format( args.user, args.repo, name ), 
+			'-F', 'key=downloads/{0}/{1}/{2}'.format( args.user, args.repo, name ),
 			'-F', 'acl={0}'.format( r[ 'acl' ] ),
 			'-F', 'success_action_status=201',
 			'-F', 'Filename={0}'.format( name ),
@@ -133,9 +133,9 @@ def do_gmk( args ):
 	except KeyError:
 		print 'No token found for {0}, plsease authenticate first...'.format( args.user )
 		return
-	res = curl( [ 'https://api.github.com/gists' ], 
+	res = curl( [ 'https://api.github.com/gists' ],
 		{ 'description': args.desc, 'public': not args.private, 'files' : { args.filename: { 'content': args.content } } },
-		token 
+		token
 	)
 	print 'Gist id: ', res.json[ 'id' ]
 
@@ -148,9 +148,9 @@ def do_gup( args ):
 	res = curl( [
 		'-X', 'PATCH',
 		'https://api.github.com/gists/{0}'.format( args.gid )
-		], 
-		{ 'files': { args.filename: { 'content': args.content } } }, 
-		token 
+		],
+		{ 'files': { args.filename: { 'content': args.content } } },
+		token
 	)
 	print 'New content: ', res.json[ 'files' ][ args.filename ][ 'content' ]
 
@@ -161,18 +161,18 @@ if __name__ == '__main__':
 
 	subparsers = argparser.add_subparsers( help = 'subcommands')
 
-	# auth 
-	
+	# auth
+
 	parser_auth = subparsers.add_parser( 'auth', help = 'obtain an authorization token' )
-	parser_auth.add_argument( 'user', help = 'user to authenticate as to obtain the token' ) 
+	parser_auth.add_argument( 'user', help = 'user to authenticate as to obtain the token' )
 	parser_auth.set_defaults( func = do_auth )
-	
+
 	# downloads
 
 	userrepo_parser = ArgumentParser( add_help = False )
-	userrepo_parser.add_argument( 'user', help = 'repository owner' ) 
+	userrepo_parser.add_argument( 'user', help = 'repository owner' )
 	userrepo_parser.add_argument( 'repo', help = 'repository name' )
-	
+
 	parser_dls = subparsers.add_parser( 'dls', help = 'list the available downloads of a repo', parents = [ userrepo_parser ] )
 	parser_dls.set_defaults( func = do_dls )
 
@@ -185,21 +185,21 @@ if __name__ == '__main__':
 	parser_drm.add_argument( 'dlid', help = 'the identity of the download' )
 	parser_drm.set_defaults( func = do_drm )
 
-	# gists 
-	
-	parser_gmk = subparsers.add_parser( 'gmk', help = 'update the contents of a file in a gist' )
-	parser_gmk.add_argument( 'user', help = 'gist owner' ) 
-	parser_gmk.add_argument( 'desc', help = 'gist description' ) 
+	# gists
+
+	parser_gmk = subparsers.add_parser( 'gmk', help = 'post the contents of a file in a new gist' )
+	parser_gmk.add_argument( 'user', help = 'gist owner' )
+	parser_gmk.add_argument( 'desc', help = 'gist description' )
 	parser_gmk.add_argument( '-p', '--private', help = 'whether the gist must be private', action = 'store_true' )
-	parser_gmk.add_argument( 'filename', help = 'name of the file to crate in the gist' ) 
+	parser_gmk.add_argument( 'filename', help = 'name of the file to crate in the gist' )
 	parser_gmk.add_argument( 'content', help = 'content for the file' )
 	parser_gmk.set_defaults( func = do_gmk )
 
 	parser_gup = subparsers.add_parser( 'gup', help = 'update the contents of a file in a gist' )
-	parser_gup.add_argument( 'user', help = 'gist owner' ) 
-	parser_gup.add_argument( 'gid', help = 'gist id' ) 
-	parser_gup.add_argument( 'filename', help = 'name of the file in the gist to update' ) 
-	parser_gup.add_argument( 'content', help = 'updated content for the file' ) 
+	parser_gup.add_argument( 'user', help = 'gist owner' )
+	parser_gup.add_argument( 'gid', help = 'gist id' )
+	parser_gup.add_argument( 'filename', help = 'name of the file in the gist to update' )
+	parser_gup.add_argument( 'content', help = 'updated content for the file' )
 	parser_gup.set_defaults( func = do_gup )
 
 	# read stored tokens if present
@@ -211,6 +211,6 @@ if __name__ == '__main__':
 		tokens = dict()
 
 	# go!
-	
+
 	args = argparser.parse_args()
 	args.func( args )
