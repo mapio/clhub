@@ -19,6 +19,7 @@
 
 from argparse import ArgumentParser
 from collections import namedtuple
+from functools import wraps
 from getpass import getpass
 from httplib import responses
 from json import dump, dumps, load, loads
@@ -31,7 +32,24 @@ from urllib import unquote
 from xml.dom.minidom import parseString
 from xml.parsers.expat import ExpatError
 
-__version__ = '0.1.0'
+__version__ = '0.1.1'
+
+def provide_token( required = True ):
+	def _r( f ):
+		@wraps( f )
+		def _c( args ):
+			try:
+				token = tokens[ args.user ]
+			except KeyError:
+				if ( required ):
+					print 'No token found for {0}, plsease authenticate first...'.format( args.user )
+					return
+				else:
+					token = None
+					print 'No token found for {0}, using anonymous access...'.format( args.user )
+			return f( args, token )
+		return _c
+	return _r
 
 def curl( args, data = None, token = None ):
 	if token:
@@ -72,23 +90,15 @@ def do_auth( args ):
 		dump( tokens, f )
 	print 'Got token:', token
 
-def do_dls( args ):
-	try:
-		token = tokens[ args.user ]
-	except KeyError:
-		token = None
-		print 'No token found for {0}, using anonymous access...'.format( args.user )
+@provide_token( required = False )
+def do_dls( args, token = None ):
 	res = curl( [ 'https://api.github.com/repos/{0}/{1}/downloads'.format( args.user, args.repo ) ], token = token )
 	if res.json:
 		print '\t'.join( ( 'DLID', 'NAME', 'DESCRIPTION' ) )
 		for dl in res.json: print '\t'.join( ( str( dl[ 'id' ] ), dl[ 'name' ], dl[ 'description' ] ) )
 
-def do_dup( args ):
-	try:
-		token = tokens[ args.user ]
-	except KeyError:
-		print 'No token found for {0}, plsease authenticate first...'.format( args.user )
-		return
+@provide_token()
+def do_dup( args, token = None ):
 	name = basename( args.path )
 	content_type = guess_type( args.path )[ 0 ]
 	res = curl(
@@ -114,37 +124,24 @@ def do_dup( args ):
 		raise RuntimeError( 'Problems uploading' )
 	print 'Uploaded to: ', unquote( res.xml.getElementsByTagName( 'Location' )[ 0 ].firstChild.data )
 
-
-def do_drm( args ):
-	try:
-		token = tokens[ args.user ]
-	except KeyError:
-		print 'No token found for {0}, plsease authenticate first...'.format( args.user )
-		return
+@provide_token()
+def do_drm( args, token = None ):
 	res = curl( [
 			'-X', 'DELETE',
 			'https://api.github.com/repos/{0}/{1}/downloads/{2}'.format( args.user, args.repo, args.dlid )
 		], token = token )
 	print res.status
 
-def do_gmk( args ):
-	try:
-		token = tokens[ args.user ]
-	except KeyError:
-		print 'No token found for {0}, plsease authenticate first...'.format( args.user )
-		return
+@provide_token()
+def do_gmk( args, token = None ):
 	res = curl( [ 'https://api.github.com/gists' ],
 		{ 'description': args.desc, 'public': not args.private, 'files' : { args.filename: { 'content': args.content } } },
 		token
 	)
 	print 'Gist id: ', res.json[ 'id' ]
 
-def do_gup( args ):
-	try:
-		token = tokens[ args.user ]
-	except KeyError:
-		print 'No token found for {0}, plsease authenticate first...'.format( args.user )
-		return
+@provide_token()
+def do_gup( args, token = None ):
 	res = curl( [
 		'-X', 'PATCH',
 		'https://api.github.com/gists/{0}'.format( args.gid )
