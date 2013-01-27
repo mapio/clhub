@@ -54,6 +54,6 @@ very rough.
 
 ## Where are the downloads related commands gone?
 
-Due to [](https://github.com/blog/1302-goodbye-uploads) the support for
-downloads has been removed. You can check revision
+Due to [Goodbye, Uploads](https://github.com/blog/1302-goodbye-uploads) the support for
+downloads has been removed. You can check [downloads_support](https://github.com/mapio/clhub/tree/downloads_support) tag.
 
