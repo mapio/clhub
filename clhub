@@ -17,18 +17,16 @@
 # You should have received a copy of the GNU General Public License along with
 # Learning-Week-2012-Software If not, see <http://www.gnu.org/licenses/>.
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, FileType
 from collections import namedtuple
 from functools import wraps
 from getpass import getpass
 from httplib import responses
 from json import dump, dumps, load, loads
 from mimetools import Message
-from mimetypes import guess_type
-from os.path import expanduser, exists, getsize, basename
+from os.path import expanduser, exists
 from StringIO import StringIO
 from subprocess import Popen, PIPE
-from urllib import unquote
 from xml.dom.minidom import parseString
 from xml.parsers.expat import ExpatError
 
@@ -90,66 +88,28 @@ def do_auth( args ):
 		dump( tokens, f )
 	print 'Got token:', token
 
-@provide_token( required = False )
-def do_dls( args, token = None ):
-	res = curl( [ 'https://api.github.com/repos/{0}/{1}/downloads'.format( args.user, args.repo ) ], token = token )
-	if res.json:
-		print '\t'.join( ( 'DLID', 'NAME', 'DESCRIPTION' ) )
-		for dl in res.json: print '\t'.join( ( str( dl[ 'id' ] ), dl[ 'name' ], dl[ 'description' ] ) )
-
-@provide_token()
-def do_dup( args, token = None ):
-	name = basename( args.path )
-	content_type = guess_type( args.path )[ 0 ]
-	res = curl(
-		[ 'https://api.github.com/repos/{0}/{1}/downloads'.format( args.user, args.repo ) ],
-		{ 'name': name, 'size': getsize( args.path ), 'description': args.desc, 'content_type': content_type },
-		token
-	)
-	try:
-		r = res.json
-		res = curl( [
-			'-F', 'key=downloads/{0}/{1}/{2}'.format( args.user, args.repo, name ),
-			'-F', 'acl={0}'.format( r[ 'acl' ] ),
-			'-F', 'success_action_status=201',
-			'-F', 'Filename={0}'.format( name ),
-			'-F', 'AWSAccessKeyId={0}'.format( r[ 'accesskeyid' ] ),
-			'-F', 'Policy={0}'.format( r[ 'policy' ] ),
-			'-F', 'Signature={0}'.format( r[ 'signature' ] ),
-			'-F', 'Content-Type={0}'.format( content_type ),
-			'-F', 'file=@{0}'.format( args.path ),
-			'https://github.s3.amazonaws.com/'
-		] )
-	except KeyError:
-		raise RuntimeError( 'Problems uploading' )
-	print 'Uploaded to: ', unquote( res.xml.getElementsByTagName( 'Location' )[ 0 ].firstChild.data )
-
-@provide_token()
-def do_drm( args, token = None ):
-	res = curl( [
-			'-X', 'DELETE',
-			'https://api.github.com/repos/{0}/{1}/downloads/{2}'.format( args.user, args.repo, args.dlid )
-		], token = token )
-	print res.status
-
 @provide_token()
 def do_gmk( args, token = None ):
 	res = curl( [ 'https://api.github.com/gists' ],
-		{ 'description': args.desc, 'public': not args.private, 'files' : { args.filename: { 'content': args.content } } },
+		{
+			'description': args.desc,
+			'public': not args.private,
+			'files' : { args.name: { 'content': args.file.read() } }
+		},
 		token
 	)
 	print 'Gist id: ', res.json[ 'id' ]
 
 @provide_token()
 def do_gup( args, token = None ):
-	res = curl( [
+	curl( [
 		'-X', 'PATCH',
 		'https://api.github.com/gists/{0}'.format( args.gid )
 		],
-		{ 'files': { args.filename: { 'content': args.content } } },
+		{ 'files': { args.name: { 'content': args.file.read() } } },
 		token
 	)
-	print 'New content: ', res.json[ 'files' ][ args.filename ][ 'content' ]
+
 
 if __name__ == '__main__':
 
@@ -164,39 +124,21 @@ if __name__ == '__main__':
 	parser_auth.add_argument( 'user', help = 'user to authenticate as to obtain the token' )
 	parser_auth.set_defaults( func = do_auth )
 
-	# downloads
-
-	userrepo_parser = ArgumentParser( add_help = False )
-	userrepo_parser.add_argument( 'user', help = 'repository owner' )
-	userrepo_parser.add_argument( 'repo', help = 'repository name' )
-
-	parser_dls = subparsers.add_parser( 'dls', help = 'list the available downloads of a repo', parents = [ userrepo_parser ] )
-	parser_dls.set_defaults( func = do_dls )
-
-	parser_dup = subparsers.add_parser( 'dup', help = 'upload a file to the downloads of a repo', parents = [ userrepo_parser ] )
-	parser_dup.add_argument( 'path', help = 'pathname of the file to upload' )
-	parser_dup.add_argument( 'desc', help = 'description' )
-	parser_dup.set_defaults( func = do_dup )
-
-	parser_drm = subparsers.add_parser( 'drm', help = 'remove one of the downloads of a repo', parents = [ userrepo_parser ] )
-	parser_drm.add_argument( 'dlid', help = 'the identity of the download' )
-	parser_drm.set_defaults( func = do_drm )
-
 	# gists
 
 	parser_gmk = subparsers.add_parser( 'gmk', help = 'post the contents of a file in a new gist' )
 	parser_gmk.add_argument( 'user', help = 'gist owner' )
 	parser_gmk.add_argument( 'desc', help = 'gist description' )
 	parser_gmk.add_argument( '-p', '--private', help = 'whether the gist must be private', action = 'store_true' )
-	parser_gmk.add_argument( 'filename', help = 'name of the file to crate in the gist' )
-	parser_gmk.add_argument( 'content', help = 'content for the file' )
+	parser_gmk.add_argument( 'name', help = 'name of the file to crate in the gist' )
+	parser_gmk.add_argument( 'file', help = 'content for the file', type = FileType( 'r' ) )
 	parser_gmk.set_defaults( func = do_gmk )
 
 	parser_gup = subparsers.add_parser( 'gup', help = 'update the contents of a file in a gist' )
 	parser_gup.add_argument( 'user', help = 'gist owner' )
 	parser_gup.add_argument( 'gid', help = 'gist id' )
-	parser_gup.add_argument( 'filename', help = 'name of the file in the gist to update' )
-	parser_gup.add_argument( 'content', help = 'updated content for the file' )
+	parser_gup.add_argument( 'name', help = 'name of the file in the gist to update' )
+	parser_gup.add_argument( 'file', help = 'updated content for the file', type = FileType( 'r' ) )
 	parser_gup.set_defaults( func = do_gup )
 
 	# read stored tokens if present
