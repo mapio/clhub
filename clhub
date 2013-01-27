@@ -74,6 +74,9 @@ def curl( args, data = None, token = None ):
 	return curl.Result( status = status, headers = headers, body = body, json = json, xml = xml )
 curl.Result = namedtuple( 'Result', 'status headers body json xml' )
 
+def pprint( json ):
+	print dumps( json, sort_keys=True, indent=4, separators=(',', ': ') )
+
 def do_auth( args ):
 	pwd = getpass( 'Password for user {0}: '.format( args.user ) )
 	res = curl(
@@ -110,6 +113,25 @@ def do_gup( args, token = None ):
 		token
 	)
 
+@provide_token()
+def do_hls( args, token = None ):
+	res = curl( [
+		'https://api.github.com/repos/{0}/{1}/hooks'.format( args.user, args.repo )
+		],
+		token = token
+	)
+	for hook in res.json: pprint( hook )
+
+@provide_token()
+def do_wmk( args, token = None ):
+	res = curl( [
+		'https://api.github.com/repos/{0}/{1}/hooks'.format( args.user, args.repo )
+		],
+		{ 'name': 'web', 'config': { 'url': args.url, 'content-type': 'form' } },
+		token
+	)
+	pprint( res.json )
+
 
 if __name__ == '__main__':
 
@@ -140,6 +162,19 @@ if __name__ == '__main__':
 	parser_gup.add_argument( 'name', help = 'name of the file in the gist to update' )
 	parser_gup.add_argument( 'file', help = 'updated content for the file', type = FileType( 'r' ) )
 	parser_gup.set_defaults( func = do_gup )
+
+	# hooks
+
+	userrepo_parser = ArgumentParser( add_help = False )
+	userrepo_parser.add_argument( 'user', help = 'repository owner' )
+	userrepo_parser.add_argument( 'repo', help = 'repository name' )
+
+	parser_hls = subparsers.add_parser( 'hls', help = 'list the hooks of a repo', parents = [ userrepo_parser ] )
+	parser_hls.set_defaults( func = do_hls )
+
+	parser_wmk = subparsers.add_parser( 'wmk', help = 'add a web hook to a repo', parents = [ userrepo_parser ] )
+	parser_wmk.add_argument( 'url', help = 'url to receive the post' )
+	parser_wmk.set_defaults( func = do_wmk )
 
 	# read stored tokens if present
 

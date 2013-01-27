@@ -1,7 +1,7 @@
 # Command Line GitHub client (CLHub)
 
 This is a very rough command line tool to automate some of the tasks related to
-repository downloads and gists.
+gists and web hooks.
 
 More in detail:
 
@@ -54,6 +54,8 @@ very rough.
 
 ## Where are the downloads related commands gone?
 
-Due to [Goodbye, Uploads](https://github.com/blog/1302-goodbye-uploads) the support for
-downloads has been removed. You can check [downloads_support](https://github.com/mapio/clhub/tree/downloads_support) tag.
+Due to [Goodbye, Uploads](https://github.com/blog/1302-goodbye-uploads) the
+support for downloads has been removed; you can check the
+[downloads_support](https://github.com/mapio/clhub/tree/downloads_support) tag
+if you are interested in the latest version supporting them.
 
