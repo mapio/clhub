@@ -13,12 +13,16 @@ More in detail:
 A list of available subcommands:
 
 	$ ./clhub -h
-	usage: clhub [-h] [--version] {gmk,gup,auth} ...
+	usage: clhub [-h] [--version] {auth,gmk,gup,hls,wmk} ...
 
-	subcommands:
+	positional arguments:
+	  {auth,gmk,gup,hls,wmk}
+	                        subcommands
 	    auth                obtain an authorization token
 	    gmk                 post the contents of a file in a new gist
 	    gup                 update the contents of a file in a gist
+	    hls                 list the hooks of a repo
+	    wmk                 add a web hook to a repo
 
 	optional arguments:
 	  -h, --help            show this help message and exit
