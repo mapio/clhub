@@ -85,7 +85,7 @@ def do_auth( args ):
 	)
 	try:
 		token = tokens[ args.user ] = res.json[ 'token' ]
-	except AttributeError:
+	except KeyError:
 		raise RuntimeError( 'Problem authenticationg' )
 	with open( tokens_path, 'w' ) as f:
 		dump( tokens, f )
